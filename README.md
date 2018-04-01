@@ -6,7 +6,10 @@ Tensorflow => [native pip install for tensorflow](https://www.tensorflow.org/ins
 
 opencv2 => [opencv2 installation shell script](https://gist.github.com/arthurbeggs/06df46af94af7f261513934e56103b30)
 
-TensorLayer
+Other Dependencies (Tensorlayer, Scikit-learn):
 ```
 sudo -H pip install tensorlayer
+sudo -H pip install scikit-learn
 ```
+
+
