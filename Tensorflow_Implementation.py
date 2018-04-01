@@ -21,7 +21,7 @@ import os
 
 np.random.seed(1)
 
-mydevice = '/hpu:0'
+mydevice = '/gpu:0'
 
 path = 'Training/'
 img_w = 160
