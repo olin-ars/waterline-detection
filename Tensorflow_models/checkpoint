@@ -1,0 +1,2 @@
+model_checkpoint_path: "u_net_test_model"
+all_model_checkpoint_paths: "u_net_test_model"
