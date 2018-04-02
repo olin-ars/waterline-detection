@@ -409,22 +409,22 @@ def u_net(x, is_train=False, reuse=False, n_out=1):
         pool4 = MaxPool2d(conv4, (2, 2), name='pool4')
         conv5 = Conv2d(pool4, 1024, (3, 3), act=tf.nn.relu, name='conv5_1')
         conv5 = Conv2d(conv5, 1024, (3, 3), act=tf.nn.relu, name='conv5_2')
+	
+	
+	"""weights = tf.get_variable('conv_5_2/W_conv2d')
 
-        with tf.variable_scope('conv5_2') as scope_conv:
-			weights = tf.get_variable('weights')
+	# scale weights to [0 255] and convert to uint8 (maybe change scaling?)
+	x_min = tf.reduce_min(weights)
+	x_max = tf.reduce_max(weights)
+	weights_0_to_1 = (weights - x_min) / (x_max - x_min)
+	weights_0_to_255_uint8 = tf.image.convert_image_dtype (weights_0_to_1, dtype=tf.uint8)
 
-			# scale weights to [0 255] and convert to uint8 (maybe change scaling?)
-			x_min = tf.reduce_min(weights)
-			x_max = tf.reduce_max(weights)
-			weights_0_to_1 = (weights - x_min) / (x_max - x_min)
-			weights_0_to_255_uint8 = tf.image.convert_image_dtype (weights_0_to_1, dtype=tf.uint8)
+	# to tf.image_summary format [batch_size, height, width, channels]
+	weights_transposed = tf.transpose (weights_0_to_255_uint8, [3, 0, 1, 2])
 
-			# to tf.image_summary format [batch_size, height, width, channels]
-			weights_transposed = tf.transpose (weights_0_to_255_uint8, [3, 0, 1, 2])
-
-			# this will display random 3 filters from the 64 in conv1
-			tf.image_summary('conv5_2/filters', weights_transposed, max_images=3)
-
+	# this will display random 3 filters from the 64 in conv1
+	tf.image_summary('conv5_2/filters', weights_transposed, max_images=3)
+"""
         up4 = DeConv2d(conv5, 512, (3, 3), (nx/8, ny/8), (2, 2), name='deconv4')
         up4 = ConcatLayer([up4, conv4], 3, name='concat4')
         conv4 = Conv2d(up4, 512, (3, 3), act=tf.nn.relu, name='uconv4_1')
@@ -442,20 +442,21 @@ def u_net(x, is_train=False, reuse=False, n_out=1):
         conv1 = Conv2d(up1, 64, (3, 3), act=tf.nn.relu, name='uconv1_1')
         conv1 = Conv2d(conv1, 64, (3, 3), act=tf.nn.relu, name='uconv1_2')
         conv1 = Conv2d(conv1, n_out, (1, 1), act=tf.nn.sigmoid, name='uconv1')
-        with tf.variable_scope('uconv1') as scope_conv:
-			weights = tf.get_variable('weights')
+        with tf.variable_scope('conv5_2', reuse = True) as scope_conv:
+			weights = tf.get_variable('W_conv2d')
 
 			# scale weights to [0 255] and convert to uint8 (maybe change scaling?)
 			x_min = tf.reduce_min(weights)
 			x_max = tf.reduce_max(weights)
 			weights_0_to_1 = (weights - x_min) / (x_max - x_min)
 			weights_0_to_255_uint8 = tf.image.convert_image_dtype (weights_0_to_1, dtype=tf.uint8)
+                        weights_remapped = tf.reshape(weights_0_to_255_uint8, [3,3,1,-1])
 
 			# to tf.image_summary format [batch_size, height, width, channels]
-			weights_transposed = tf.transpose (weights_0_to_255_uint8, [3, 0, 1, 2])
+			weights_transposed = tf.transpose (weights_remapped, [3, 0, 1, 2])
 
 			# this will display random 3 filters from the 64 in conv1
-			tf.image_summary('uconv1/filters', weights_transposed, max_images=3)
+			tf.summary.image('conv5_2/filters', weights_transposed, max_outputs=3)
     return conv1
 
 def reduced_u_net(x, is_train=False, reuse=False, n_out=1):
@@ -509,7 +510,7 @@ lr = 0.0001
 beta1 = 0.9
 n_epoch = 20
 print_freq_step = 1
-
+summary_record_step = 4
 
 
 
@@ -529,13 +530,18 @@ net_test = u_net(t_image, is_train=False, reuse=True, n_out=2) #reduced_u_net
 ###======================== DEFINE LOSS =========================###
 ## train losses
 out_seg = net.outputs
+
+
 with tf.name_scope('train_loss'):
 	with tf.name_scope('dice_soft'):
 		dice_loss = 1 - tl.cost.dice_coe(out_seg, t_seg, axis=[0,1,2,3])#, 'jaccard', epsilon=1e-5)
+                tf.summary.scalar("dice_loss", dice_loss, family = "train")
 	with tf.name_scope('iou_loss'):
 		iou_loss = tl.cost.iou_coe(out_seg, t_seg, axis=[0,1,2,3])
+                tf.summary.scalar("iou_loss", iou_loss, family = "train")
 	with tf.name_scope('dice_hard'):
 		dice_hard = tl.cost.dice_hard_coe(out_seg, t_seg, axis=[0,1,2,3])
+                tf.summary.scalar("dice_hard", dice_hard, family = "train")
 loss = dice_loss
 
 ## test losses
@@ -556,11 +562,11 @@ with tf.variable_scope('learning_rate'):
 with tf.name_scope('adam_optimizer'):
 	train_op = tf.train.AdamOptimizer(lr_v, beta1=beta1).minimize(loss, var_list=t_vars)
 ###======================== LOAD MODEL ==============================###
+merged = tf.summary.merge_all()
+sum_writer = tf.summary.FileWriter("logs", sess.graph)
 tl.layers.initialize_global_variables(sess)
 ## load existing model if possible
 ## tl.files.load_and_assign_npz(sess=sess, name=save_dir+'/u_net_{}.npz'.format(task), network=net)
-tf.summary.FileWriter("logs", tf.get_default_graph()).close()
-
 
 
 
@@ -569,6 +575,7 @@ tf.summary.FileWriter("logs", tf.get_default_graph()).close()
 for epoch in range(0, n_epoch+1):
     epoch_time = time.time()
     total_dice, total_iou, total_dice_hard, n_batch = 0, 0, 0, 0
+    i = 0;
     for batch in tl.iterate.minibatches(inputs=X_train, targets=y_train,
                                 batch_size=batch_size, shuffle=True):
         images, labels = batch
@@ -578,9 +585,19 @@ for epoch in range(0, n_epoch+1):
         #images, labels = data.transpose((1,0,2,3,4))
         
         ## update network
-        _, _dice, _iou, _diceh, out = sess.run([train_op,
-                dice_loss, iou_loss, dice_hard, net.outputs],
-                {t_image: images, t_seg: labels})
+        _dice = 0; _iou = 0; _diceh = 0; out = 0;
+        if i % summary_record_step == 0:
+            _, _dice, _iou, _diceh, out, summy = sess.run([train_op,
+                    dice_loss, iou_loss, dice_hard, net.outputs, merged],
+                    {t_image: images, t_seg: labels})
+            sum_writer.add_summary(summy, i);
+        
+
+        else:
+            _, _dice, _iou, _diceh, out = sess.run([train_op,
+                    dice_loss, iou_loss, dice_hard, net.outputs],
+                    {t_image: images, t_seg: labels})
+
 
 
         total_dice += _dice; total_iou += _iou; total_dice_hard += _diceh
@@ -594,13 +611,15 @@ for epoch in range(0, n_epoch+1):
             plt.show()
             plt.imshow(np.argmax(out[0],axis=-1))
             plt.show()"""
-            
+        
 
         ## check model fail
         if np.isnan(_dice):
             exit(" ** NaN loss found during training, stop training")
         if np.isnan(out).any():
             exit(" ** NaN found in output images during training, stop training")
+        
+        i += 1
 
     print(" ** Epoch [%d/%d] train 1-dice: %f hard-dice: %f iou: %f took %fs" %
             (epoch, n_epoch, total_dice/n_batch, total_dice_hard/n_batch, total_iou/n_batch, time.time()-epoch_time))
