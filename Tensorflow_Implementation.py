@@ -97,7 +97,7 @@ def binarylab(labels):
             x[i,j,labels[i][j]]=1
     return x
 
-def prep_data(path, augmentation1, augmentation2):
+"""def prep_data(path, augmentation1, augmentation2):
     train_data = []
     train_label = []
     train_data_path = []
@@ -201,7 +201,7 @@ val_data, val_label = prep_data( path2, False, False )
 
 
 
-print(len(train_data))
+print(len(train_data))"""
 
 """plt.imshow(train_data[0])
 plt.show()
@@ -311,9 +311,9 @@ with open(path+'data.txt') as f:
     txt = f.readlines()
     txt = [line.split(' ') for line in txt]
 
-image= cv2.imread(os.getcwd() + "/" + path + txt[1][0])
-image= cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-annotation=cv2.imread(os.getcwd() + "/" + path + txt[1][1])
+#image= cv2.imread(os.getcwd() + "/" + path + txt[1][0])
+#image= cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+#annotation=cv2.imread(os.getcwd() + "/" + path + txt[1][1])
 
 """
 plt.imshow(image)
