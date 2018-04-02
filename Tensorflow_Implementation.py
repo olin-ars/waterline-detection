@@ -21,7 +21,7 @@ import os
 
 np.random.seed(1)
 
-mydevice = '/gpu:0'
+#mydevice = '/gpu:0'
 
 path = 'Training/'
 img_w = 160
@@ -400,6 +400,21 @@ def u_net(x, is_train=False, reuse=False, n_out=1):
         conv5 = Conv2d(pool4, 1024, (3, 3), act=tf.nn.relu, name='conv5_1')
         conv5 = Conv2d(conv5, 1024, (3, 3), act=tf.nn.relu, name='conv5_2')
 
+        with tf.variable_scope('conv5_2') as scope_conv:
+			weights = tf.get_variable('weights')
+
+			# scale weights to [0 255] and convert to uint8 (maybe change scaling?)
+			x_min = tf.reduce_min(weights)
+			x_max = tf.reduce_max(weights)
+			weights_0_to_1 = (weights - x_min) / (x_max - x_min)
+			weights_0_to_255_uint8 = tf.image.convert_image_dtype (weights_0_to_1, dtype=tf.uint8)
+
+			# to tf.image_summary format [batch_size, height, width, channels]
+			weights_transposed = tf.transpose (weights_0_to_255_uint8, [3, 0, 1, 2])
+
+			# this will display random 3 filters from the 64 in conv1
+			tf.image_summary('conv5_2/filters', weights_transposed, max_images=3)
+
         up4 = DeConv2d(conv5, 512, (3, 3), (nx/8, ny/8), (2, 2), name='deconv4')
         up4 = ConcatLayer([up4, conv4], 3, name='concat4')
         conv4 = Conv2d(up4, 512, (3, 3), act=tf.nn.relu, name='uconv4_1')
@@ -417,6 +432,20 @@ def u_net(x, is_train=False, reuse=False, n_out=1):
         conv1 = Conv2d(up1, 64, (3, 3), act=tf.nn.relu, name='uconv1_1')
         conv1 = Conv2d(conv1, 64, (3, 3), act=tf.nn.relu, name='uconv1_2')
         conv1 = Conv2d(conv1, n_out, (1, 1), act=tf.nn.sigmoid, name='uconv1')
+        with tf.variable_scope('uconv1') as scope_conv:
+			weights = tf.get_variable('weights')
+
+			# scale weights to [0 255] and convert to uint8 (maybe change scaling?)
+			x_min = tf.reduce_min(weights)
+			x_max = tf.reduce_max(weights)
+			weights_0_to_1 = (weights - x_min) / (x_max - x_min)
+			weights_0_to_255_uint8 = tf.image.convert_image_dtype (weights_0_to_1, dtype=tf.uint8)
+
+			# to tf.image_summary format [batch_size, height, width, channels]
+			weights_transposed = tf.transpose (weights_0_to_255_uint8, [3, 0, 1, 2])
+
+			# this will display random 3 filters from the 64 in conv1
+			tf.image_summary('uconv1/filters', weights_transposed, max_images=3)
     return conv1
 
 def reduced_u_net(x, is_train=False, reuse=False, n_out=1):
@@ -478,40 +507,48 @@ print_freq_step = 1
 
 import tensorlayer as tl
 import os, time
-with tf.device(mydevice):
-    sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
-    with tf.device(mydevice):
-        ###======================== DEFIINE MODEL =======================###
-        t_image = tf.placeholder('float32', [batch_size, img_h, img_w, 3], name='input_image')
-        ## labels are either 0 or 1
-        t_seg = tf.placeholder('float32', [batch_size, img_h, img_w, 2], name='target_segment')
-        ## train inference
-        net = reduced_u_net(t_image, is_train=True, reuse=False, n_out=2)
-        ## test inference
-        net_test = reduced_u_net(t_image, is_train=False, reuse=True, n_out=2)
-        ###======================== DEFINE LOSS =========================###
-        ## train losses
-        out_seg = net.outputs
-        dice_loss = 1 - tl.cost.dice_coe(out_seg, t_seg, axis=[0,1,2,3])#, 'jaccard', epsilon=1e-5)
-        iou_loss = tl.cost.iou_coe(out_seg, t_seg, axis=[0,1,2,3])
-        dice_hard = tl.cost.dice_hard_coe(out_seg, t_seg, axis=[0,1,2,3])
-        loss = dice_loss
-        
-        ## test losses
-        test_out_seg = net_test.outputs
-        test_dice_loss = 1 - tl.cost.dice_coe(test_out_seg, t_seg, axis=[0,1,2,3])#, 'jaccard', epsilon=1e-5)
-        test_iou_loss = tl.cost.iou_coe(test_out_seg, t_seg, axis=[0,1,2,3])
-        test_dice_hard = tl.cost.dice_hard_coe(test_out_seg, t_seg, axis=[0,1,2,3])
+sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
+###======================== DEFIINE MODEL =======================###
+t_image = tf.placeholder('float32', [batch_size, img_h, img_w, 3], name='input_image')
+## labels are either 0 or 1
+t_seg = tf.placeholder('float32', [batch_size, img_h, img_w, 2], name='target_segment')
+## train inference
+net = u_net(t_image, is_train=True, reuse=False, n_out=2) #reduced_u_net
+## test inference
+net_test = u_net(t_image, is_train=False, reuse=True, n_out=2) #reduced_u_net
+###======================== DEFINE LOSS =========================###
+## train losses
+out_seg = net.outputs
+with tf.name_scope('train_loss'):
+	with tf.name_scope('dice_soft'):
+		dice_loss = 1 - tl.cost.dice_coe(out_seg, t_seg, axis=[0,1,2,3])#, 'jaccard', epsilon=1e-5)
+	with tf.name_scope('iou_loss'):
+		iou_loss = tl.cost.iou_coe(out_seg, t_seg, axis=[0,1,2,3])
+	with tf.name_scope('dice_hard'):
+		dice_hard = tl.cost.dice_hard_coe(out_seg, t_seg, axis=[0,1,2,3])
+loss = dice_loss
 
-    ###======================== DEFINE TRAIN OPTS =======================###
-    t_vars = tl.layers.get_variables_with_name('u_net', True, True)
-    with tf.variable_scope('learning_rate'):
-        lr_v = tf.Variable(lr, trainable=False)
-    train_op = tf.train.AdamOptimizer(lr_v, beta1=beta1).minimize(loss, var_list=t_vars)
-    ###======================== LOAD MODEL ==============================###
-    tl.layers.initialize_global_variables(sess)
-    ## load existing model if possible
-    ## tl.files.load_and_assign_npz(sess=sess, name=save_dir+'/u_net_{}.npz'.format(task), network=net)
+## test losses
+test_out_seg = net_test.outputs
+with tf.name_scope('test_loss'):
+	with tf.name_scope('dice_soft'):
+		test_dice_loss = 1 - tl.cost.dice_coe(test_out_seg, t_seg, axis=[0,1,2,3])#, 'jaccard', epsilon=1e-5)
+	with tf.name_scope('iou_loss'):
+		test_iou_loss = tl.cost.iou_coe(test_out_seg, t_seg, axis=[0,1,2,3])
+	with tf.name_scope('dice_hard'):
+		test_dice_hard = tl.cost.dice_hard_coe(test_out_seg, t_seg, axis=[0,1,2,3])
+
+###======================== DEFINE TRAIN OPTS =======================###
+t_vars = tl.layers.get_variables_with_name('u_net', True, True)
+with tf.variable_scope('learning_rate'):
+    lr_v = tf.Variable(lr, trainable=False)
+
+with tf.name_scope('adam_optimizer'):
+	train_op = tf.train.AdamOptimizer(lr_v, beta1=beta1).minimize(loss, var_list=t_vars)
+###======================== LOAD MODEL ==============================###
+tl.layers.initialize_global_variables(sess)
+## load existing model if possible
+## tl.files.load_and_assign_npz(sess=sess, name=save_dir+'/u_net_{}.npz'.format(task), network=net)
 tf.summary.FileWriter("logs", tf.get_default_graph()).close()
 
 
@@ -576,6 +613,9 @@ for epoch in range(0, n_epoch+1):
     # save the test model as 'u_net_test_model'
     saver = tf.train.Saver()
     saver.save(sess, './Tensorflow_models/u_net_test_model')
+
+
+
 
 
 
