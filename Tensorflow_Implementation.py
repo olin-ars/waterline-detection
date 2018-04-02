@@ -503,12 +503,12 @@ def reduced_u_net(x, is_train=False, reuse=False, n_out=1):
 
 
 ###======================== HYPER-PARAMETERS ============================###
-batch_size = 30
+batch_size = 1
 lr = 0.0001 
 # lr_decay = 0.5
 # decay_every = 100
 beta1 = 0.9
-n_epoch = 20
+n_epoch = 50
 print_freq_step = 1
 summary_record_step = 4
 
@@ -538,24 +538,26 @@ x_max = tf.reduce_max(out_seg)
 out_seg_0_to_1 = (out_seg - x_min) / (x_max - x_min)
 out_seg_0_to_255_uint8 = tf.image.convert_image_dtype (out_seg_0_to_1, dtype=tf.uint8)
 
-
+output_image_l1 = tf.slice(out_seg_0_to_255_uint8, [0,0,0,0], [batch_size, img_h, img_w, 1])
+output_image_l2 = tf.slice(out_seg_0_to_255_uint8, [0,0,0,1], [batch_size, img_h, img_w, 1])
 # to tf.image_summary format [batch_size, height, width, channels]
 #out_seg_transposed = tf.transpose (out_seg_0_to_255_uint8, [2, 0, 1])
 
 # this will display random 3 filters from the 64 in conv1
-tf.summary.image('conv5_2/filters', out_seg_0_to_255_uint8, max_outputs=3)
+tf.summary.image('output_layer_1', output_image_l2, max_outputs=1)
+tf.summary.image('output_layer_2', output_image_l2, max_outputs=1)
 
 
 with tf.name_scope('train_loss'):
 	with tf.name_scope('dice_soft'):
 		dice_loss = 1 - tl.cost.dice_coe(out_seg, t_seg, axis=[0,1,2,3])#, 'jaccard', epsilon=1e-5)
-                tf.summary.scalar("dice_loss", dice_loss, family = "train")
+                tf.summary.scalar("dice_loss", dice_loss)
 	with tf.name_scope('iou_loss'):
 		iou_loss = tl.cost.iou_coe(out_seg, t_seg, axis=[0,1,2,3])
-                tf.summary.scalar("iou_loss", iou_loss, family = "train")
+                tf.summary.scalar("iou_loss", iou_loss)
 	with tf.name_scope('dice_hard'):
 		dice_hard = tl.cost.dice_hard_coe(out_seg, t_seg, axis=[0,1,2,3])
-                tf.summary.scalar("dice_hard", dice_hard, family = "train")
+                tf.summary.scalar("dice_hard", dice_hard)
 loss = dice_loss
 
 ## test losses
