@@ -530,6 +530,20 @@ net_test = u_net(t_image, is_train=False, reuse=True, n_out=2) #reduced_u_net
 ###======================== DEFINE LOSS =========================###
 ## train losses
 out_seg = net.outputs
+print(tf.shape(out_seg))
+
+# scale weights to [0 255] and convert to uint8 (maybe change scaling?)
+x_min = tf.reduce_min(out_seg)
+x_max = tf.reduce_max(out_seg)
+out_seg_0_to_1 = (out_seg - x_min) / (x_max - x_min)
+out_seg_0_to_255_uint8 = tf.image.convert_image_dtype (out_seg_0_to_1, dtype=tf.uint8)
+
+
+# to tf.image_summary format [batch_size, height, width, channels]
+#out_seg_transposed = tf.transpose (out_seg_0_to_255_uint8, [2, 0, 1])
+
+# this will display random 3 filters from the 64 in conv1
+tf.summary.image('conv5_2/filters', out_seg_0_to_255_uint8, max_outputs=3)
 
 
 with tf.name_scope('train_loss'):
