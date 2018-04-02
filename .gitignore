@@ -1,1 +1,4 @@
 *.pk
+logs/*
+
+Tensorflow_models/*

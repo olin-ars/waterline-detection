@@ -13,7 +13,8 @@ import numpy as np
 #import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.python.framework import ops
-import cv2
+import pickle as pk
+#import cv2
 import random
 import os
 
@@ -201,7 +202,17 @@ val_data, val_label = prep_data( path2, False, False )
 
 
 
+
 print(len(train_data))"""
+
+print("loading training data")
+train_data = pk.load(open("train_data.pk", "rb"))
+print("loading training labels")
+train_label = pk.load(open("train_label.pk", "rb"))
+print("loading validation data")
+val_data = pk.load(open("val_data.pk", "rb"))
+print("loading validation labels")
+val_label = pk.load(open("val_label.pk", "rb"))
 
 """plt.imshow(train_data[0])
 plt.show()
@@ -315,8 +326,7 @@ with open(path+'data.txt') as f:
 #image= cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 #annotation=cv2.imread(os.getcwd() + "/" + path + txt[1][1])
 
-"""
-plt.imshow(image)
+"""plt.imshow(image)
 plt.show()
 plt.imshow(visualize(annotation[:,:,0]))
 plt.show()
