@@ -450,7 +450,7 @@ def u_net(x, is_train=False, reuse=False, n_out=1):
 			x_max = tf.reduce_max(weights)
 			weights_0_to_1 = (weights - x_min) / (x_max - x_min)
 			weights_0_to_255_uint8 = tf.image.convert_image_dtype (weights_0_to_1, dtype=tf.uint8)
-                        weights_remapped = tf.reshape(weights_0_to_255_uint8, [3,3,1,-1])
+            weights_remapped = tf.reshape(weights_0_to_255_uint8, [3,3,1,-1])
 
 			# to tf.image_summary format [batch_size, height, width, channels]
 			weights_transposed = tf.transpose (weights_remapped, [3, 0, 1, 2])
@@ -544,7 +544,7 @@ output_image_l2 = tf.slice(out_seg_0_to_255_uint8, [0,0,0,1], [batch_size, img_h
 #out_seg_transposed = tf.transpose (out_seg_0_to_255_uint8, [2, 0, 1])
 
 # this will display random 3 filters from the 64 in conv1
-tf.summary.image('output_layer_1', output_image_l2, max_outputs=1)
+tf.summary.image('output_layer_1', output_image_l1, max_outputs=1)
 tf.summary.image('output_layer_2', output_image_l2, max_outputs=1)
 
 
